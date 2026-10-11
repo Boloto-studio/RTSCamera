@@ -33,7 +33,7 @@ The user does not write Minecraft mods; Claude does all the implementation.
   - `client/BuildToolBridge.java`: wraps Structurize's `AbstractBlueprintManipulationWindow` and its `BlueprintPreviewData` (via `RenderingCache`). Reads private `bluePrintId` / `groundOffset` and calls `updateRotationState` reflectively. `isOverUi` repeats BlockUI's click hit-test: GUI coords → window coords via `BOScreen` `x/y/mcScale/renderScale`, then children relative to parent minus `padding`. `Text` labels don't count as UI; `ScrollingView` does.
   - `client/RtsHud.java`: overlay on the build tool window. Slim status bar centred in the strip above the window; a two-column controls card in the screen centre, toggled with H (hidden by default). Structurize's "tip" label is hidden while in RTS.
   - `client/ColonyRules.java`: MineColonies checks (in colony, `Action.PLACE_HUTS` permission, `IColonyView#isRaiding`).
-- `src/main/resources/assets/rtscamera/lang/`: all user-facing strings. `en_us.json` (English) and `uk_ua.json` (Ukrainian). **Add every new key to both files.**
+- `src/main/resources/assets/rtscamera/lang/`: all user-facing strings. `en_us.json` (English), `uk_ua.json` (Ukrainian), `hal_ua.json` (Галицька, Galician dialect of Ukrainian; the code comes from something in the user's modpack, vanilla 1.20.1 has no such language; the user translates it themselves). **Add every new key to all three files.**
 
 ## How the MineColonies feature works
 RTS mode is a camera mode that runs **underneath the open build tool window**. The player selects buildings, rotates and confirms in the normal Structurize UI without leaving the top-down view.
