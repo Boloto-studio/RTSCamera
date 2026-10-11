@@ -155,9 +155,15 @@ public class RtsScreen extends Screen
     {
         switch (keyCode)
         {
+            // No modifier keys here: Shift/Space/Ctrl move the camera, so combos would make it drift
             case InputConstants.KEY_R ->
             {
-                rotateBuilding(hasShiftDown() ? Rotation.COUNTERCLOCKWISE_90 : Rotation.CLOCKWISE_90);
+                rotateBuilding(Rotation.CLOCKWISE_90);
+                return true;
+            }
+            case InputConstants.KEY_F ->
+            {
+                rotateBuilding(Rotation.COUNTERCLOCKWISE_90);
                 return true;
             }
             case InputConstants.KEY_M ->

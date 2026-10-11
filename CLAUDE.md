@@ -58,3 +58,4 @@ The user does not write Minecraft mods; Claude does all the implementation.
 - Brace-on-new-line Java style (matches LDTTeam code), `final` params/locals, Javadoc on classes and non-obvious methods.
 - Keep the mod client-only unless a feature truly needs server logic. If it does, add a network channel and drop `IGNORESERVERONLY`.
 - Put any new user-facing text in `en_us.json`.
+- RTS controls: never use Shift/Ctrl/Space combos for actions. Those keys move the camera (user reported Shift+R making the camera drift). Building rotation is R (clockwise) / F (counter-clockwise).

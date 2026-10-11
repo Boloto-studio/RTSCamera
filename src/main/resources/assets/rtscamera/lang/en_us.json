@@ -15,7 +15,7 @@
   "rtscamera.help.rotate_camera": "Q/E or middle-drag: rotate camera",
   "rtscamera.help.zoom": "Scroll: zoom",
   "rtscamera.help.place": "Left click/drag: move building to cursor",
-  "rtscamera.help.rotate_building": "Right click or R: rotate building (Shift+R: other way)   M: mirror",
+  "rtscamera.help.rotate_building": "Right click or R: rotate building   F: rotate other way   M: mirror",
   "rtscamera.help.height": "Page Up/Down: raise/lower building",
   "rtscamera.help.done": "Enter or Esc: back to build tool to confirm",
 
