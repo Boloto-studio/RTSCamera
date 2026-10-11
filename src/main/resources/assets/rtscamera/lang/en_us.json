@@ -1,0 +1,29 @@
+{
+  "rtscamera.gui.button": "RTS View",
+  "rtscamera.gui.button.tooltip": "Place this building from a top-down camera",
+  "rtscamera.gui.rotate_left": "Rotate ⟲",
+  "rtscamera.gui.rotate_right": "Rotate ⟳",
+  "rtscamera.gui.mirror": "Mirror",
+  "rtscamera.gui.raise": "Raise",
+  "rtscamera.gui.lower": "Lower",
+  "rtscamera.gui.done": "Done",
+
+  "rtscamera.screen.title": "RTS View",
+  "rtscamera.screen.title_colony": "RTS View — %s",
+
+  "rtscamera.help.move": "WASD: move   Space/Shift: up/down   Ctrl: faster",
+  "rtscamera.help.rotate_camera": "Q/E or middle-drag: rotate camera",
+  "rtscamera.help.zoom": "Scroll: zoom",
+  "rtscamera.help.place": "Left click/drag: move building to cursor",
+  "rtscamera.help.rotate_building": "Right click or R: rotate building (Shift+R: other way)   M: mirror",
+  "rtscamera.help.height": "Page Up/Down: raise/lower building",
+  "rtscamera.help.done": "Enter or Esc: back to build tool to confirm",
+
+  "rtscamera.error.not_in_colony": "You must be standing inside your colony to use the RTS view.",
+  "rtscamera.error.not_your_colony": "You don't have permission to place buildings in this colony.",
+  "rtscamera.error.raid": "The RTS view is unavailable while your colony is being raided!",
+  "rtscamera.error.no_blueprint": "Select a building first, then open the RTS view.",
+
+  "rtscamera.exit.raid": "Raid! RTS view closed.",
+  "rtscamera.exit.hurt": "You took damage. RTS view closed."
+}
