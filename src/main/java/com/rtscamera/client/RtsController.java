@@ -1,5 +1,7 @@
 package com.rtscamera.client;
 
+import com.ldtteam.blockui.BOScreen;
+import com.ldtteam.blockui.views.BOWindow;
 import com.ldtteam.structurize.client.gui.AbstractBlueprintManipulationWindow;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.IColonyView;
@@ -10,6 +12,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
@@ -23,10 +26,9 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
-import java.util.Objects;
-
 /**
  * Owns the RTS camera session: entering/leaving, per-tick movement and the colony/raid restrictions.
+ * The session runs underneath the Structurize build tool window, which stays open and usable.
  */
 public final class RtsController
 {
@@ -52,17 +54,16 @@ public final class RtsController
     private static final class Session
     {
         final RtsCameraEntity camera;
-        final BuildToolBridge buildTool;
         final int colonyId;
         final Entity previousCamera;
         final CameraType previousCameraType;
-        final RtsScreen screen;
+        BuildToolBridge buildTool;
         IColonyView colony;
         Vec3 velocity = Vec3.ZERO;
         double pendingZoom;
 
         Session(final RtsCameraEntity camera, final BuildToolBridge buildTool, final IColonyView colony, final Entity previousCamera,
-          final CameraType previousCameraType, final RtsScreen screen)
+          final CameraType previousCameraType)
         {
             this.camera = camera;
             this.buildTool = buildTool;
@@ -70,7 +71,6 @@ public final class RtsController
             this.colonyId = colony.getID();
             this.previousCamera = previousCamera;
             this.previousCameraType = previousCameraType;
-            this.screen = screen;
         }
     }
 
@@ -91,8 +91,15 @@ public final class RtsController
         return session == null ? null : session.buildTool;
     }
 
+    /** True if the given screen is the build tool window the session is driving. */
+    public static boolean isSessionScreen(final Object screen)
+    {
+        return session != null && session.buildTool.window().getScreen() == screen;
+    }
+
     /**
-     * Called from the build tool button. Enters RTS mode if the colony rules allow it.
+     * Called from the build tool button. Switches the camera to RTS mode if the colony rules allow it.
+     * The build tool window stays open.
      */
     public static void tryEnter(final AbstractBlueprintManipulationWindow window)
     {
@@ -111,33 +118,24 @@ public final class RtsController
         }
 
         final BuildToolBridge buildTool = new BuildToolBridge(window);
-        if (!buildTool.hasBlueprint())
-        {
-            deny(player, Component.translatable("rtscamera.error.no_blueprint"));
-            return;
-        }
-
         final IColonyView colony = check.colony();
         final RtsCameraEntity camera = new RtsCameraEntity(mc.level);
         final float yaw = Math.round(player.getYRot() / 45F) * 45F;
         camera.snapRotation(yaw, DEFAULT_PITCH);
         placeCameraInitially(camera, player, colony, buildTool.preview().getPos());
 
-        final RtsScreen screen = new RtsScreen();
-        session = new Session(camera, buildTool, colony, mc.getCameraEntity(), mc.options.getCameraType(), screen);
+        session = new Session(camera, buildTool, colony, mc.getCameraEntity(), mc.options.getCameraType());
 
         mc.options.setCameraType(CameraType.FIRST_PERSON);
         mc.setCameraEntity(camera);
-        mc.setScreen(screen);
     }
 
     /**
-     * Leaves RTS mode and restores the normal camera.
+     * Leaves RTS mode and restores the normal camera. Screens are left as they are.
      *
-     * @param reopenBuildTool return to the build tool window (normal exit) instead of closing everything.
-     * @param reason          optional message shown to the player.
+     * @param reason optional message shown to the player.
      */
-    public static void exit(final boolean reopenBuildTool, @Nullable final Component reason)
+    public static void exit(@Nullable final Component reason)
     {
         final Session s = session;
         if (s == null)
@@ -152,37 +150,17 @@ public final class RtsController
 
         if (reason != null && mc.player != null)
         {
-            mc.player.displayClientMessage(reason, true);
-        }
-
-        if (reopenBuildTool && mc.player != null)
-        {
-            s.buildTool.refreshWindow();
-            s.buildTool.window().open();
-        }
-        else if (mc.screen == s.screen)
-        {
-            mc.setScreen(null);
+            mc.player.displayClientMessage(reason, false);
         }
     }
 
-    /** Drops the session without touching screens; used on disconnect. */
+    /** Drops the session without touching anything else; used on disconnect. */
     public static void reset()
     {
         if (session != null)
         {
-            final Minecraft mc = Minecraft.getInstance();
-            mc.options.setCameraType(session.previousCameraType);
+            Minecraft.getInstance().options.setCameraType(session.previousCameraType);
             session = null;
-        }
-    }
-
-    /** Called when our screen is removed; if something else replaced it (death, disconnect) we bail out. */
-    static void onScreenRemoved(final RtsScreen screen)
-    {
-        if (session != null && session.screen == screen)
-        {
-            exit(false, null);
         }
     }
 
@@ -198,61 +176,73 @@ public final class RtsController
         final LocalPlayer player = mc.player;
         if (player == null || mc.level == null || s.camera.level() != mc.level || !player.isAlive())
         {
-            exit(false, null);
+            exit(null);
             return;
+        }
+
+        // Stay in RTS while a BlockUI window is open (the build tool, or dialogs it opens such as the
+        // style switcher). Closing it (Esc, cancel, confirming a placement) returns to first person.
+        if (!(mc.screen instanceof final BOScreen screen))
+        {
+            exit(null);
+            return;
+        }
+        final BOWindow window = screen.getWindow();
+        if (BuildToolBridge.supports(window) && window != s.buildTool.window())
+        {
+            // e.g. a fresh build tool window after switching style packs
+            s.buildTool = new BuildToolBridge((AbstractBlueprintManipulationWindow) window);
         }
 
         final IColonyView colony = IColonyManager.getInstance().getColonyView(s.colonyId, mc.level.dimension());
         if (colony == null)
         {
-            exit(false, null);
+            exit(null);
             return;
         }
         s.colony = colony;
 
         if (colony.isRaiding())
         {
-            exit(false, Component.translatable("rtscamera.exit.raid"));
+            exit(Component.translatable("rtscamera.exit.raid"));
             return;
         }
         if (player.hurtTime > 0)
         {
-            exit(false, Component.translatable("rtscamera.exit.hurt"));
+            exit(Component.translatable("rtscamera.exit.hurt"));
             return;
         }
 
-        tickMovement(s, mc);
+        tickMovement(s, mc, BOWindow.getFocus() == null);
     }
 
-    private static void tickMovement(final Session s, final Minecraft mc)
+    private static void tickMovement(final Session s, final Minecraft mc, final boolean acceptKeys)
     {
         final RtsCameraEntity camera = s.camera;
         camera.startTick();
 
-        // Rotation via keys (Q/E)
-        float yaw = camera.getYRot();
-        if (isKeyDown(mc, InputConstants.KEY_Q))
-        {
-            yaw -= KEY_ROTATE_SPEED;
-        }
-        if (isKeyDown(mc, InputConstants.KEY_E))
-        {
-            yaw += KEY_ROTATE_SPEED;
-        }
-        camera.setYRot(yaw);
-
-        // Horizontal movement relative to camera yaw, using the player's movement key bindings
         double forward = 0;
         double strafe = 0;
         double vertical = 0;
-        if (isDown(mc, mc.options.keyUp)) forward++;
-        if (isDown(mc, mc.options.keyDown)) forward--;
-        if (isDown(mc, mc.options.keyLeft)) strafe++;
-        if (isDown(mc, mc.options.keyRight)) strafe--;
-        if (isDown(mc, mc.options.keyJump)) vertical++;
-        if (isDown(mc, mc.options.keyShift)) vertical--;
+        boolean sprint = false;
+        float yaw = camera.getYRot();
 
-        final double speed = MOVE_SPEED * (isDown(mc, mc.options.keySprint) ? SPRINT_MULTIPLIER : 1);
+        // Keys are polled directly because the build tool screen is open; skip while typing in a text field
+        if (acceptKeys)
+        {
+            if (isKeyDown(mc, InputConstants.KEY_Q)) yaw -= KEY_ROTATE_SPEED;
+            if (isKeyDown(mc, InputConstants.KEY_E)) yaw += KEY_ROTATE_SPEED;
+            if (isDown(mc, mc.options.keyUp)) forward++;
+            if (isDown(mc, mc.options.keyDown)) forward--;
+            if (isDown(mc, mc.options.keyLeft)) strafe++;
+            if (isDown(mc, mc.options.keyRight)) strafe--;
+            if (isDown(mc, mc.options.keyJump)) vertical++;
+            if (isDown(mc, mc.options.keyShift)) vertical--;
+            sprint = isDown(mc, mc.options.keySprint);
+        }
+        camera.setYRot(yaw);
+
+        final double speed = MOVE_SPEED * (sprint ? SPRINT_MULTIPLIER : 1);
         final float yawRad = yaw * Mth.DEG_TO_RAD;
         final double sin = Mth.sin(yawRad);
         final double cos = Mth.cos(yawRad);
@@ -341,19 +331,28 @@ public final class RtsController
         }
     }
 
+    /** Horizontal direction the camera is facing, snapped to the nearest axis. */
+    public static Direction cameraFacing()
+    {
+        return session == null ? Direction.NORTH : Direction.fromYRot(session.camera.getYRot());
+    }
+
     /**
-     * Ray-casts from the camera through a screen position.
+     * Ray-casts from the camera through a mouse position (GUI-scaled coordinates, as passed to screen mouse events).
+     * Uses the window's GUI-scaled size: BlockUI screens overwrite {@code Screen#width/height} with their own scale.
      *
      * @return the hit, or null if nothing was hit.
      */
     @Nullable
-    public static BlockHitResult pick(final double mouseX, final double mouseY, final int screenWidth, final int screenHeight)
+    public static BlockHitResult pick(final double mouseX, final double mouseY)
     {
         if (session == null)
         {
             return null;
         }
         final Minecraft mc = Minecraft.getInstance();
+        final int screenWidth = mc.getWindow().getGuiScaledWidth();
+        final int screenHeight = mc.getWindow().getGuiScaledHeight();
         final Camera cam = mc.gameRenderer.getMainCamera();
         final Vec3 origin = cam.getPosition();
         final Vector3f look = cam.getLookVector();
@@ -378,24 +377,19 @@ public final class RtsController
 
     /**
      * Moves the building preview to the block under the cursor, if it is inside the colony.
-     *
-     * @return true if the preview moved.
      */
-    public static boolean placePreviewAtCursor(final double mouseX, final double mouseY, final int screenWidth, final int screenHeight)
+    public static void placePreviewAtCursor(final double mouseX, final double mouseY)
     {
-        final BlockHitResult hit = pick(mouseX, mouseY, screenWidth, screenHeight);
+        final BlockHitResult hit = pick(mouseX, mouseY);
         if (hit == null || session == null)
         {
-            return false;
+            return;
         }
         final BlockPos target = hit.getBlockPos().relative(hit.getDirection());
-        if (!ColonyRules.isInside(session.colony, session.camera.level(), target))
+        if (ColonyRules.isInside(session.colony, session.camera.level(), target))
         {
-            return false;
+            session.buildTool.placeCenteredAt(target);
         }
-        final BlockPos current = session.buildTool.preview().getPos();
-        session.buildTool.placeAt(target);
-        return !Objects.equals(session.buildTool.preview().getPos(), current);
     }
 
     private static void deny(final LocalPlayer player, @Nullable final Component reason)
